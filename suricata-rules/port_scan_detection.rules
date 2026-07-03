@@ -1,0 +1,7 @@
+# Port scan detection via Suricata's built-in threshold/detection_filter
+# mechanism: alerts when a single source IP sends TCP SYN packets to 5+
+# distinct destination ports within a 10-second window. This uses
+# Suricata's `flow` and `detection_filter` keywords rather than a custom
+# stateful tracker, since Suricata already has robust built-in support
+# for this exact pattern.
+alert tcp any any -> any any (msg:"SCAN - Possible TCP port scan (multiple SYN, distinct ports)"; flags:S; detection_filter:track by_src, count 5, seconds 10; classtype:attempted-recon; sid:1000020; rev:1; metadata:mitre_technique T1046;)

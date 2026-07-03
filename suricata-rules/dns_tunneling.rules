@@ -1,0 +1,12 @@
+# Detects DNS queries with unusually long subdomain labels — a common
+# indicator of DNS tunneling (exfiltrating data or C2 traffic encoded
+# into DNS query names to evade network egress controls that only watch
+# HTTP/HTTPS). Suricata's dns.query keyword inspects the queried name.
+# The `pcre` match approximates "a label segment longer than ~40 chars",
+# since Suricata's content/dns.query keywords alone don't directly
+# expose per-label length — a real deployment would likely pair this
+# with a dedicated DNS tunneling detection plugin/threshold rule rather
+# than pattern-matching alone, noted as a limitation in README.
+alert dns any any -> any any (msg:"DNS - Possible tunneling via long subdomain label"; dns.query; pcre:"/^[a-zA-Z0-9+\/=]{40,}\./"; classtype:trojan-activity; sid:1000010; rev:1; metadata:mitre_technique T1071.004;)
+
+alert dns any any -> any any (msg:"DNS - Query to known suspicious TLD pattern"; dns.query; content:".evil-c2."; nocase; classtype:trojan-activity; sid:1000011; rev:1; metadata:mitre_technique T1071.004;)

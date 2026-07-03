@@ -1,0 +1,9 @@
+# Real Suricata rule syntax. Detects common SQL injection payloads in the
+# HTTP request URI. Suricata's `content` matches are case-sensitive by
+# default; `nocase` makes them case-insensitive, important since
+# attackers/tools vary case to evade naive detection.
+alert http any any -> any any (msg:"SQLI - Common SQL injection pattern in URI"; flow:established,to_server; http.uri; content:"' OR '"; nocase; classtype:web-application-attack; sid:1000001; rev:1; metadata:mitre_technique T1190;)
+
+alert http any any -> any any (msg:"SQLI - UNION SELECT pattern in URI"; flow:established,to_server; http.uri; content:"UNION SELECT"; nocase; classtype:web-application-attack; sid:1000002; rev:1; metadata:mitre_technique T1190;)
+
+alert http any any -> any any (msg:"SQLI - Known SQLMap user agent"; flow:established,to_server; http.user_agent; content:"sqlmap"; nocase; classtype:web-application-attack; sid:1000003; rev:1; metadata:mitre_technique T1190;)
