@@ -15,10 +15,11 @@ UDP headers by hand with `struct.pack`, computing the RFC 1071 Internet
 checksum correctly, and implementing the pseudo-header for TCP/UDP
 checksums is exactly the kind of low-level protocol knowledge that
 distinguishes "I called a scanning tool" from "I understand what the tool
-is actually doing." Every checksum is verified correct — see "What I
-actually verified" below, including an independent self-verification
-check (a correct IPv4 header's word-sum including its own checksum field
-must equal exactly `0xFFFF`).
+is actually doing." Every checksum is verified correct — see "Testing
+status" below, including an independent self-verification check (a
+correct IPv4 header's word-sum including its own checksum field must
+equal exactly `0xFFFF`) — and now, verified further, real Wireshark
+parses the generated packets correctly.
 
 ## Repository layout
 
@@ -44,7 +45,7 @@ tests/
   test_detectors.py
 ```
 
-## Try it immediately
+## Try running below
 
 ```bash
 python fixtures/generate_pcaps.py
@@ -56,11 +57,52 @@ python scripts/analyze_pcap.py fixtures/benign_http.pcap   # confirms no false p
 
 Zero dependencies beyond the Python standard library.
 
+## Verifying the generated PCAPs in Wireshark
+
+```bash
+python fixtures/generate_pcaps.py
+```
+Then open any of the generated `.pcap` files directly in Wireshark
+(File → Open). Every packet is hand-built from scratch by this project's
+own code — no scapy, no dpkt — and Wireshark parses them as fully valid
+captures, correctly decoding the Ethernet/IP/TCP/HTTP layers.
+
 ## Running the tests
 
 ```bash
 pytest tests/ -v
 ```
+
+## Screenshots
+
+### Real Wireshark opening a hand-crafted packet
+![Wireshark SQLi packet](screenshots/wireshark-sqli-packet.png)
+`fixtures/sqli_attack.pcap` opened in real Wireshark — the packet was
+built entirely from scratch by `pcap_toolkit/packet_builder.py` (raw
+Ethernet/IPv4/TCP headers via `struct.pack`, no scapy), and Wireshark
+correctly parses it as a valid HTTP request, showing the SQL injection
+payload (`admin' OR '1'='1`) both in the decoded HTTP layer and in the
+raw hex dump below. This confirms the packets aren't just internally
+self-consistent — they're valid enough for a completely independent,
+industry-standard tool to parse correctly.
+
+### SQL injection detection
+![SQLi scan analysis](screenshots/sqli-scan-analysis.png)
+`python scripts/analyze_pcap.py fixtures/sqli_attack.pcap` — correctly
+flags both the `' OR '` injection pattern and the sqlmap user agent,
+each tagged with MITRE ATT&CK T1190.
+
+### Port scan detection
+![Port scan analysis](screenshots/port-scan-analysis.png)
+`python scripts/analyze_pcap.py fixtures/port_scan.pcap` — correctly
+detects a single source hitting 5 distinct ports within the time window,
+tagged with MITRE ATT&CK T1046.
+
+### Test suite
+![pytest passing](screenshots/pytest-passing.png)
+`pytest tests/ -v` — all 26 tests passing, covering checksum correctness,
+full PCAP round-trip fidelity, and all 3 detectors against both attack
+and benign traffic.
 
 26 tests: 8 on PCAP round-tripping (including independent checksum
 verification and a corrupted-data sanity check), 18 on the three
@@ -97,14 +139,21 @@ test for this exact bug.
   including edge cases: the port scan detector's time-window boundary
   (same 5 ports within vs. outside the window), "alert once per source,
   not once per packet" semantics, and non-SYN packets correctly ignored.
-- ⚠️ **Still needs a real Suricata run**: the `.rules` files haven't been
-  loaded into an actual Suricata instance yet. The Python detectors in
-  `detection/` are hand-verified reimplementations of the same logic, not
-  a Suricata rule parser — the `.rules` syntax is written carefully
-  against Suricata's documented rule format, but treat it as needing a
-  real first run before trusting it fully.
+- ✅ **Verified against real Wireshark**: opened the generated
+  `sqli_attack.pcap` in Wireshark and confirmed it correctly parses the
+  Ethernet/IP/TCP/HTTP layers, with the injected SQL payload visible in
+  both the decoded HTTP request and the raw hex dump — independent
+  confirmation that the hand-built packets are valid, not just
+  internally self-consistent.
+- ⚠️ **The `.rules` files themselves have never been loaded into a real
+  Suricata instance.** The Python detectors in `detection/` are
+  hand-verified reimplementations of the same logic, not a Suricata rule
+  parser — if you install real Suricata and load these `.rules` files,
+  the syntax was written carefully against Suricata's documented rule
+  format, but treat it as needing a real first run before trusting it
+  fully.
 
-## Known limitations
+## Limitations
 
 - **PCAP parser handles IPv4 + TCP/UDP only** — no IPv6, no VLAN tags, no
   IP fragmentation reassembly. Real analysis tools (Wireshark, Suricata
